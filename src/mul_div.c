@@ -68,6 +68,15 @@ void mul16(cpu* c, u16 op1, u8 is_imul) {
 }
 
 void div8 (cpu* c, u8 op1, u8 is_idiv) {
+    if (op1 == 0) {
+        interrupt(c, 0);
+        return;
+    }
+    u16 result_check = get_reg16_val(c, AX) / op1;
+    if (result_check > 0xFF) {
+        interrupt(c, 0);
+        return;
+    }
    set_reg8(c, AL, 
       (u8)(get_reg16_val(c, AX) / op1)
    );
@@ -77,9 +86,18 @@ void div8 (cpu* c, u8 op1, u8 is_idiv) {
 }
 
 void div16(cpu* c, u16 op1, u8 is_idiv) {
+   if (op1 == 0) {
+       interrupt(c, 0);
+       return;
+   }
    u32 numerator;
    numerator =  get_reg16_val(c, DX) << 16;
    numerator += get_reg16_val(c, AX);
+   u32 result_check = numerator / op1;
+   if (result_check > 0xFFFF) {
+       interrupt(c, 0);
+       return;
+   }
    set_reg16(c, AX, (u16)(numerator / op1));
    set_reg16(c, DX, (u16)(numerator % op1));
 }

@@ -20,6 +20,9 @@
 #ifndef CPU_ENUMS_H
 #define CPU_ENUMS_H
 
+// Define whether to enable 186 instruction set
+#define CPU_186
+
 typedef enum registers {
    AL, AH, AX, BL, BH, BX,
    CL, CH, CX, DL, DH, DX,

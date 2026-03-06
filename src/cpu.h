@@ -29,6 +29,7 @@
 
 #include "types.h"
 #include "cpu_extra.h"
+#include "instr_186.h"
 #include "memory.h"
 #include "add_sub.h"
 #include "rot_shf.h"

@@ -74,6 +74,10 @@ void shift_left_r(cpu* c, reg r, int shift_amount, u8 memsize) {
 
    old_msb = 0;
    new_msb = 0;
+
+#ifdef CPU_186
+   shift_amount &= 0x1F;
+#endif
    
    if (memsize == 8) {
       value.v16 = 0; /* just to ensure that there is no data corruption */
@@ -119,6 +123,10 @@ void shift_left_m(cpu* c, u32 addr, int shift_amount, u8 memsize) {
 
    old_msb = 0;
    new_msb = 0;
+
+#ifdef CPU_186
+   shift_amount &= 0x1F;
+#endif
    
    if (memsize == 8) {
       value.v16 = 0; /* just to ensure that there is no data corruption */
@@ -162,6 +170,10 @@ void shift_uright_r(cpu* c, reg r, int shift_amount, u8 memsize) {
    val value;
    u8 old_msb;
    old_msb = 0;
+
+#ifdef CPU_186
+   shift_amount &= 0x1F;
+#endif
    
    if (memsize == 8) {
       value.v16 = 0; /* just to ensure that there is no data corruption */
@@ -199,6 +211,10 @@ void shift_uright_m(cpu* c, u32 addr, int shift_amount, u8 memsize) {
    u8 old_msb;
    old_msb = 0;
    
+#ifdef CPU_186
+   shift_amount &= 0x1F;
+#endif
+   
    if (memsize == 8) {
       value.v16 = 0; /* just to ensure that there is no data corruption */
       value.v8 = cpu_read_u8_at(c, addr);
@@ -233,6 +249,9 @@ void shift_uright_m(cpu* c, u32 addr, int shift_amount, u8 memsize) {
 
 void shift_iright_r(cpu* c, reg r, int shift_amount, u8 memsize) {
    val value;
+#ifdef CPU_186
+   shift_amount &= 0x1F;
+#endif
    if (memsize == 8) {
       value.v16 = 0; /* just to ensure that there is no data corruption */
       value.v8 = get_reg8_val(c, r);
@@ -261,6 +280,9 @@ void shift_iright_r(cpu* c, reg r, int shift_amount, u8 memsize) {
 
 void shift_iright_m(cpu* c, u32 addr, int shift_amount, u8 memsize) {
    val value;
+#ifdef CPU_186
+   shift_amount &= 0x1F;
+#endif
    if (memsize == 8) {
       value.v16 = 0; /* just to ensure that there is no data corruption */
       value.v8 = cpu_read_u8_at(c, addr);
@@ -324,6 +346,9 @@ u16 rotate16(u16 val, u8 rby, i8 rl) {
 void rotate_left_r(cpu* c, reg r, int rotate_amount, u8 memsize) {
    val value;
    int ramt;
+#ifdef CPU_186
+   rotate_amount &= 0x1F;
+#endif
    ramt = rotate_amount % memsize;
 
    if (memsize == 8) {
@@ -350,6 +375,9 @@ void rotate_left_r(cpu* c, reg r, int rotate_amount, u8 memsize) {
 void rotate_left_m(cpu* c, u32 addr, int rotate_amount, u8 memsize) {
    val value;
    int ramt;
+#ifdef CPU_186
+   rotate_amount &= 0x1F;
+#endif
    ramt = rotate_amount % memsize;
    if (memsize == 8) {
       value.v16 = 0; /* just to ensure that there is no data corruption */
@@ -376,6 +404,9 @@ void rotate_right_r(cpu* c, reg r, int rotate_amount, u8 memsize) {
    val value;
    int bit;
    int ramt;
+#ifdef CPU_186
+   rotate_amount &= 0x1F;
+#endif
    ramt = rotate_amount % memsize;
    bit = ramt != 0 ? ramt - 1 : memsize - 1;
    if (memsize == 8) {
@@ -403,6 +434,9 @@ void rotate_right_m(cpu* c, u32 addr, int rotate_amount, u8 memsize) {
    val value;
    int bit;
    int ramt;
+#ifdef CPU_186
+   rotate_amount &= 0x1F;
+#endif
    ramt = rotate_amount % memsize;
    bit = ramt != 0 ? ramt - 1 : memsize - 1;
    if (memsize == 8) {
@@ -484,6 +518,9 @@ u16 rot_tc_16(cpu* c, u16 val, int rotate_amount, i8 rl) {
 
 void rotate_tc_r(cpu* c, reg r, int rotate_amount, u8 memsize, i8 rl) {
    val value;
+#ifdef CPU_186
+   rotate_amount &= 0x1F;
+#endif
    if (memsize == 8) {
       value.v16 = 0; /* just to ensure that there is no data corruption */
       value.v8 = get_reg8_val(c, r);
@@ -499,6 +536,9 @@ void rotate_tc_r(cpu* c, reg r, int rotate_amount, u8 memsize, i8 rl) {
 
 void rotate_tc_m(cpu* c, u32 addr, int rotate_amount, u8 memsize, i8 rl) {
    val value;
+#ifdef CPU_186
+   rotate_amount &= 0x1F;
+#endif
    if (memsize == 8) {
       value.v16 = 0; /* just to ensure that there is no data corruption */
       value.v8 = cpu_read_u8_at(c, addr);

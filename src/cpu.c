@@ -302,6 +302,15 @@ u16 xchg16(cpu *c, reg r, u16 val) {
    return regval;
 }
 
+void salc(cpu* c) {
+    if (getCF(c)) {
+        set_reg8(c, AL, 0xFF);
+    }
+    else {
+        set_reg8(c, AL, 0x00);
+    }
+}
+
 void xlat(cpu *c) {
    set_reg8(c, AL, 
       base_offset(
@@ -682,6 +691,10 @@ void cpu_exec(cpu *c, u8 opcode) {
          set_reg16(c, AX, or16(c, get_reg16_val(c, AX), cpu_read_u16_at(c, addr)));
          (c->ip)+=2;
       break;
+
+#ifndef CPU_186
+      case 0x0f: pop_r(c, CS);  break;
+#endif
 
       case 0x10:
          extract_rg_mrm(c, &next, &rg, &m_rm, 8);
@@ -1347,6 +1360,90 @@ void cpu_exec(cpu *c, u8 opcode) {
          (c->ip)+=2;
       break;
 
+#ifdef CPU_186
+      case 0x60: pusha(c); break;
+      case 0x61: popa(c); break;
+
+      case 0x62:
+          extract_rg_mrm(c, &next, &rg, &m_rm, 16);
+          if (m_rm < 24) {
+              mod = MOD(next);
+              get_offset_mrm(c, &next, &m_rm, &mod, &offset);
+              addr = get_mrm_loc(
+                  c,
+                  m_rm,
+                  (segment_override != 0)
+                  ? get_base_override(c, segment_override)
+                  : get_base_from_mrm(c, m_rm),
+                  offset
+              );
+              bound(c, rg, addr);
+          }
+          else {
+              interrupt(c, 6);
+          }
+          break;
+
+      case 0x68:
+          push16(c, cpu_read_u16_at(c, base_offset(c->cs, c->ip)));
+          c->ip += 2;
+          break;
+      case 0x69:
+      case 0x6B:
+      {
+          u8 is_word_imm = (opcode == 0x69);
+          extract_rg_mrm(c, &next, &rg, &m_rm, 16);
+
+          i32 op1;
+          if (m_rm >= 24) {
+              op1 = (i16)get_reg16_val(c, get_reg16(R_M(next)));
+          }
+          else {
+              mod = MOD(next);
+              get_offset_mrm(c, &next, &m_rm, &mod, &offset);
+              addr = get_mrm_loc(c, m_rm,
+                  (segment_override != 0) ? get_base_override(c, segment_override)
+                  : get_base_from_mrm(c, m_rm),
+                  offset);
+              op1 = (i16)cpu_read_u16_at(c, addr);
+          }
+
+          i32 op2;
+          if (is_word_imm) {
+              op2 = (i16)cpu_read_u16_at(c, base_offset(c->cs, c->ip));
+              c->ip += 2;
+          }
+          else {
+              op2 = (i8)cpu_read_u8_at(c, base_offset(c->cs, c->ip));
+              c->ip++;
+          }
+
+          i32 result = op1 * op2;
+          set_reg16(c, rg, (u16)result);
+
+          if (result > 0x7FFF || result < -0x8000) {
+              setCF(c);
+              setOF(c);
+          }
+          else {
+              resetCF(c);
+              resetOF(c);
+          }
+      }
+      break;
+      case 0x6A:
+      {
+          u8 imm8 = cpu_read_u8_at(c, base_offset(c->cs, c->ip));
+          c->ip++;
+          push16(c, (u16)((i16)((i8)imm8)));
+      }
+      break;
+      case 0x6C: insb(c); break;
+      case 0x6D: insw(c); break;
+      case 0x6E: outsb(c); break;
+      case 0x6F: outsw(c); break;
+#endif
+
       case 0xd4:
          next = cpu_read_u8_at(c, base_offset(c->cs, c->ip));
          (c->ip)++;
@@ -1359,7 +1456,24 @@ void cpu_exec(cpu *c, u8 opcode) {
          if(next == 0x0a) aad(c);
       break;
 
+      case 0xd6: salc(c); break;
       case 0xd7: xlat(c); break;
+
+      case 0xd8:
+      case 0xd9:
+      case 0xda:
+      case 0xdb:
+      case 0xdc:
+      case 0xdd:
+      case 0xde:
+      case 0xdf:
+          next = cpu_read_u8_at(c, base_offset(c->cs, c->ip));
+          (c->ip)++;
+          m_rm = MRM(next);
+          mod = MOD(next);
+          get_offset_mrm(c, &next, &m_rm, &mod, &offset);
+          break;
+
       case 0xb0: mov_r8i(c, AL, cpu_read_u8_at(c, base_offset(c->cs, c->ip))); (c->ip)++; break;
       case 0xb1: mov_r8i(c, CL, cpu_read_u8_at(c, base_offset(c->cs, c->ip))); (c->ip)++; break;
       case 0xb2: mov_r8i(c, DL, cpu_read_u8_at(c, base_offset(c->cs, c->ip))); (c->ip)++; break;
@@ -1377,6 +1491,78 @@ void cpu_exec(cpu *c, u8 opcode) {
       case 0xbd: mov_r16i(c, BP, cpu_read_u16_at(c, base_offset(c->cs, c->ip))); (c->ip)+=2; break;
       case 0xbe: mov_r16i(c, SI, cpu_read_u16_at(c, base_offset(c->cs, c->ip))); (c->ip)+=2; break;
       case 0xbf: mov_r16i(c, DI, cpu_read_u16_at(c, base_offset(c->cs, c->ip))); (c->ip)+=2; break;
+
+#ifdef CPU_186
+      case 0xC0:
+      {
+          regi = extract_rg_mrm(c, &next, &rg, &m_rm, 8);
+          u8 imm = cpu_read_u8_at(c, base_offset(c->cs, c->ip));
+          c->ip++;
+
+          if (m_rm >= 24) {
+              other_reg = get_reg8(R_M(next));
+              switch (regi) {
+              case 0: rotate_left_r(c, other_reg, imm, 8); break;
+              case 1: rotate_right_r(c, other_reg, imm, 8); break;
+              case 2: rotate_tc_r(c, other_reg, imm, 8, -1); break;
+              case 3: rotate_tc_r(c, other_reg, imm, 8, 1); break;
+              case 4: shift_left_r(c, other_reg, imm, 8); break;
+              case 5: shift_uright_r(c, other_reg, imm, 8); break;
+              case 7: shift_iright_r(c, other_reg, imm, 8); break;
+              }
+          }
+          else {
+              mod = MOD(next);
+              get_offset_mrm(c, &next, &m_rm, &mod, &offset);
+              addr = get_mrm_loc(c, m_rm, (segment_override != 0) ? get_base_override(c, segment_override) : get_base_from_mrm(c, m_rm), offset);
+              switch (regi) {
+              case 0: rotate_left_m(c, addr, imm, 8); break;
+              case 1: rotate_right_m(c, addr, imm, 8); break;
+              case 2: rotate_tc_m(c, addr, imm, 8, -1); break;
+              case 3: rotate_tc_m(c, addr, imm, 8, 1); break;
+              case 4: shift_left_m(c, addr, imm, 8); break;
+              case 5: shift_uright_m(c, addr, imm, 8); break;
+              case 7: shift_iright_m(c, addr, imm, 8); break;
+              }
+          }
+      }
+      break;
+
+      case 0xC1:
+      {
+          regi = extract_rg_mrm(c, &next, &rg, &m_rm, 16);
+          u8 imm = cpu_read_u8_at(c, base_offset(c->cs, c->ip));
+          c->ip++;
+
+          if (m_rm >= 24) {
+              other_reg = get_reg16(R_M(next));
+              switch (regi) {
+              case 0: rotate_left_r(c, other_reg, imm, 16); break;
+              case 1: rotate_right_r(c, other_reg, imm, 16); break;
+              case 2: rotate_tc_r(c, other_reg, imm, 16, -1); break;
+              case 3: rotate_tc_r(c, other_reg, imm, 16, 1); break;
+              case 4: shift_left_r(c, other_reg, imm, 16); break;
+              case 5: shift_uright_r(c, other_reg, imm, 16); break;
+              case 7: shift_iright_r(c, other_reg, imm, 16); break;
+              }
+          }
+          else {
+              mod = MOD(next);
+              get_offset_mrm(c, &next, &m_rm, &mod, &offset);
+              addr = get_mrm_loc(c, m_rm, (segment_override != 0) ? get_base_override(c, segment_override) : get_base_from_mrm(c, m_rm), offset);
+              switch (regi) {
+              case 0: rotate_left_m(c, addr, imm, 16); break;
+              case 1: rotate_right_m(c, addr, imm, 16); break;
+              case 2: rotate_tc_m(c, addr, imm, 16, -1); break;
+              case 3: rotate_tc_m(c, addr, imm, 16, 1); break;
+              case 4: shift_left_m(c, addr, imm, 16); break;
+              case 5: shift_uright_m(c, addr, imm, 16); break;
+              case 7: shift_iright_m(c, addr, imm, 16); break;
+              }
+          }
+      }
+      break;
+#endif
 
       case 0xa0:
          src_val = cpu_read_u16_at(c, base_offset(c->cs, c->ip));
@@ -1646,6 +1832,21 @@ void cpu_exec(cpu *c, u8 opcode) {
          }
       break;
 
+#ifdef CPU_186
+      case 0xC8:
+      {
+          u16 storage = cpu_read_u16_at(c, base_offset(c->cs, c->ip));
+          (c->ip) += 2;
+          u8 level = cpu_read_u8_at(c, base_offset(c->cs, c->ip));
+          (c->ip)++;
+          enter(c, storage, level);
+      }
+      break;
+      case 0xC9:
+          leave(c);
+          break;
+#endif
+
       case 0x8e:
          extract_rg_mrm(c, &next, &rg, &m_rm, 0);
          if (m_rm >= 24) {
@@ -1844,6 +2045,7 @@ void cpu_exec(cpu *c, u8 opcode) {
       case 0x55: push_r(c, BP);  break;
       case 0x56: push_r(c, SI);  break;
       case 0x57: push_r(c, DI);  break;
+      case 0x9b: break;
       case 0x9c: push_r(c, FLG); break;
       case 0x06: push_r(c, ES);  break;
       case 0x0e: push_r(c, CS);  break;
@@ -1863,6 +2065,7 @@ void cpu_exec(cpu *c, u8 opcode) {
       case 0x17: pop_r(c, SS);  break;
       case 0x1f: pop_r(c, DS);  break;
 
+      case 0x90: break;
       case 0x91: xchg_ax(c, CX); break;
       case 0x92: xchg_ax(c, DX); break;
       case 0x93: xchg_ax(c, BX); break;
@@ -2830,12 +3033,23 @@ void cpu_exec(cpu *c, u8 opcode) {
       case 0xcc:
          interrupt(c,3);
          break;
+
+      case 0xce:
+          if (getOF(c)) {
+              interrupt(c, 4);
+          }
+      break;
       
       case 0xcf:
          iret(c);
          break;
-   
-      default: break; /* nops and unused */
+
+      default: 
+	      printf("Invalid opcode: 0x%X\n", opcode);
+#ifdef CPU_186
+          interrupt(c, 6);
+#endif
+          break;
    }
    /* setting the segment override to 0 after executing every instruction */
    segment_override = 0;
